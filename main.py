@@ -2,6 +2,8 @@ import discord
 from discord.ext import commands
 import calendar
 import time
+import asyncio
+import json
 from bot_token import token
 
 prefix = ".."
@@ -48,6 +50,9 @@ async def help(ctx):
     embed.add_field(name="deletefilter \"word\" [channels]",
                     value="Based on word/phrase and channels separated by spaces, stop watching it in those channels",
                     inline=False)
+    embed.add_field(name="clearfilter \"word\"",
+                    value="Based on word/phrase, removes all enabled filters from it.",
+                    inline=False)
     embed.set_footer(text="Phrases must be wrapped in quotes but single words don't. Commands will not work when DMing bot.")
 
     await bot.send_message(ctx.message.author, embed=embed)
@@ -65,9 +70,17 @@ def check_server(member, server_id):
     if server_id not in bot.user_words[member.id]:
         bot.user_words[member.id][server_id] = dict()
 
+def ensure_valid_channels(member, server, word):
+    result = set()
+    # print("Server channels:", [x.id for x in server.channels])
+    all_channels = [x.id for x in server.channels]
+    for channel_id in bot.user_words[member.id][server.id][word]["channels"]:
+        if channel_id[2:-1] in all_channels:
+            result.add(channel_id)
+    bot.user_words[member.id][server.id][word]["channels"] = result
+
+
 # TODO: saving user data via json
-# TODO: bot.user_words = {id : { word : {last_alerted_time : seconds, server: [], channels: {set} } } }
-# TODO: bot.user_words = {id : { server : {last_alerted_time : seconds, channels: {set} } } }
 # TODO: add instructions on how to use commands on the commands themselves for good documentation. eg word = ""
 
 
@@ -169,7 +182,7 @@ async def worddetail(ctx, word):
 
     check_user(member)
     check_server(member, server_id)
-
+    ensure_valid_channels(member, ctx.message.server, word)
     if word in bot.user_words[member.id][server_id].keys():
         data = bot.user_words[member.id][server_id][word]
         embed = discord.Embed(title="Word Details for {}".format(member.name), color=0xeb8d25)
@@ -251,6 +264,28 @@ async def deletefilter(ctx, word, *args):
 
 
 @bot.command(pass_context=True)
+async def clearfilter(ctx, word):
+    """Clears filter from specified word"""
+    if ctx.message.server == None:
+        return
+
+    member = ctx.message.author
+    server_id = ctx.message.server.id
+
+    check_user(member)
+    check_server(member, server_id)
+
+    if word in bot.user_words[member.id][server_id].keys():
+        bot.user_words[member.id][server_id][word]["channels"] = set()
+        embed = discord.Embed(title="All filters removed from \"{}\"".format(word), color=0x39c12f)
+        embed.set_footer(text="Now watching entire server for word/phrase.")
+        await bot.say(embed=embed)
+        return
+    embed = discord.Embed(title="\"{}\" is not being watched.".format(word), color=0xe23a1d)
+    await bot.say(embed=embed)
+
+
+@bot.command(pass_context=True)
 async def watched(ctx):
     """Shows user a list of their watched words"""
     if ctx.message.server == None:
@@ -327,6 +362,33 @@ async def on_message(message):
     await bot.process_commands(message)
 
 
+# def set_default(data):
+#     for mem in data:
+#         for server in data[mem]:
+#             for word in data[mem][server]:
+#                 data[mem][server][word]["channels"] = list(data[mem][server][word]["channels"])
+#     print(data)
+#     print(bot.user_words)
+
+
+async def save_json():
+    """Saves user data in JSON format periodically."""
+    await bot.wait_until_ready()
+    while not bot.is_closed:
+        # user_word_str = json.dumps(bot.user_words, default=set_default)
+        user_cd_str = json.dumps(bot.user_cds)
+        wordfile = "userwords.txt"
+        cdfile = "usercds.txt"
+        # f = open(wordfile, "w+")
+        # f.write(user_word_str)
+        # f.close()
+        f = open(cdfile, "w+")
+        f.write(user_cd_str)
+        f.close()
+        print("Saving user data...(insert timestamp)")
+        await asyncio.sleep(60) # task runs every 3600 seconds (one hour)
+
+
 @bot.command()
 async def botstop():
     """Turns off the bot"""
@@ -334,5 +396,5 @@ async def botstop():
     await bot.say(embed=embed)
     await bot.logout()
 
-
+bot.loop.create_task(save_json())
 bot.run(token)
