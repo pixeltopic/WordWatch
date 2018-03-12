@@ -18,6 +18,8 @@ bot.user_words_file = "userwords.json"
 bot.user_cds_file = "usercds.json"
 bot.thumb = "https://raw.githubusercontent.com/pixeltopic/WordWatch/master/alertimage.gif"
 bot.static = -1  # used for channel dict values to mimic a set
+bot.scan_frequency = 5  # number of seconds before bot looks at a message again
+bot.save_frequency = 900  # number of seconds before bot saves user data
 
 # Non-Constants
 bot.user_words = dict()
@@ -126,6 +128,7 @@ def write_to_json():
 
 
 # TODO: add instructions on how to use commands on the commands themselves for good documentation. eg word = ""
+# Restrict botstop command to admin perms
 
 
 # example_dict = {"user id":
@@ -375,7 +378,7 @@ async def on_message(message):
         return
     current_time = calendar.timegm(time.gmtime())
 
-    if (bot.last_checked == -1 or current_time - bot.last_checked >= 5) and message.content[:2] != bot.prefix:
+    if (bot.last_checked == -1 or current_time - bot.last_checked >= bot.scan_frequency) and message.content[:2] != bot.prefix:
         # print("Check Paused.")
         bot.last_checked = current_time
 
@@ -425,7 +428,7 @@ async def save_json():
     """Saves user data in JSON format periodically."""
     await bot.wait_until_ready()
     while not bot.is_closed:
-        await asyncio.sleep(900)  # task runs every 900 seconds (15 mins)
+        await asyncio.sleep(bot.save_frequency)  # task runs every 900 seconds (15 mins)
         write_to_json()
 
 
