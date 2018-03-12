@@ -40,6 +40,7 @@ async def on_ready():
         print("Data loaded successfully.")
     else:
         print("No data files provided or one was missing. No user data loaded.")
+    await bot.change_presence(game=discord.Game(name="Looking for text..."))
 
 
 @bot.command(pass_context=True)
@@ -59,6 +60,8 @@ async def help(ctx):
                     Start watching a word, receiving alerts based on your cooldown setting. Add channels separated by spaces after to only watch those channels for word/phrase.\neg. `{prefix}watchword "hey there" #general #off-topic`
                     """.format(prefix=bot.prefix), inline=False)
     embed.add_field(name="deleteword \"word\"", value="Delete a word or phrase. Phrases must be wrapped in quotes.", inline=False)
+    embed.add_field(name="watchclear", value="Clears all watched words/phrases that you are watching.",
+                    inline=False)
     embed.add_field(name="cd [minutes]",
                     value="Toggle how long before you want to be alerted again after the most recent alert", inline=False)
     embed.add_field(name="worddetail \"word\"",
@@ -123,7 +126,6 @@ def write_to_json():
 
 
 # TODO: add instructions on how to use commands on the commands themselves for good documentation. eg word = ""
-# TODO: add clearwords command and update ..help
 
 
 # example_dict = {"user id":
@@ -165,16 +167,34 @@ async def deleteword(ctx, word):
         await bot.say(embed=embed)
         return
 
-    for watchedword in bot.user_words[member.id][server_id].keys():
-        if watchedword == word:
-            embed = discord.Embed(title="\"{}\" deleted from watch list".format(word), color=0x39c12f)
-            bot.user_words[member.id][server_id].pop(word, None)
-            await bot.say(embed=embed)
-            # print(dict(bot.user_words))
-            return
+    if word in bot.user_words[member.id][server_id].keys():
+        embed = discord.Embed(title="\"{}\" deleted from watch list".format(word), color=0x39c12f)
+        bot.user_words[member.id][server_id].pop(word, None)
+        await bot.say(embed=embed)
+        # print(dict(bot.user_words))
+        return
 
     embed = discord.Embed(title="\"{}\" was not found on your watch list".format(word), color=0xe23a1d)
     await bot.say(embed=embed)
+
+
+@bot.command(pass_context=True)
+async def watchclear(ctx):
+    """Clears all the user's watched words."""
+    if ctx.message.server == None:
+        return
+
+    member = ctx.message.author
+    server_id = ctx.message.server.id
+
+    check_user(member)
+    check_server(member, server_id)
+
+    bot.user_words[member.id][server_id] = dict()
+
+    embed = discord.Embed(title="Your watch list is cleared.", color=0x39c12f)
+    await bot.say(embed=embed)
+
 
 
 @bot.command(pass_context=True)
@@ -189,11 +209,10 @@ async def watchword(ctx, word, *args):
     check_user(member)
     check_server(member, server_id)
 
-    for watchedword in bot.user_words[member.id][server_id].keys():
-        if watchedword == word:
-            embed = discord.Embed(title="You are already watching \"{}\"".format(word), color=0x39c12f)
-            await bot.say(embed=embed)
-            return
+    if word in bot.user_words[member.id][server_id].keys():
+        embed = discord.Embed(title="You are already watching \"{}\"".format(word), color=0x39c12f)
+        await bot.say(embed=embed)
+        return
 
     for channel in args:
         if channel[:2] != "<!#" and channel[-1:] != ">":
