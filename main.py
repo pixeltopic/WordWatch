@@ -2,18 +2,26 @@ import discord
 from discord.ext import commands
 import calendar
 import time
+import datetime
 import asyncio
 import json
+import os
 from bot_token import token
 
 prefix = ".."
 bot = commands.Bot(command_prefix=prefix, description='WordWatch Bot')
 bot.remove_command('help')  # removes default help command!
 
+# Const attributes
 bot.prefix = prefix
+bot.user_words_file = "userwords.json"
+bot.user_cds_file = "usercds.json"
+bot.thumb = "https://raw.githubusercontent.com/pixeltopic/WordWatch/master/alertimage.gif"
+bot.static = -1  # used for channel dict values to mimic a set
+
+# Non-Constants
 bot.user_words = dict()
 bot.user_cds = dict()
-bot.thumb = "https://raw.githubusercontent.com/pixeltopic/WordWatch/master/alertimage.gif"
 bot.last_checked = -1  # throttles event checking to prevent overload
 
 
@@ -21,6 +29,17 @@ bot.last_checked = -1  # throttles event checking to prevent overload
 async def on_ready():
     print("Logged in as")
     print(bot.user.name)
+    print("Warning: bot requires both {} and {} to load data.".format(bot.user_words_file, bot.user_cds_file))
+    if os.path.isfile("./" + bot.user_words_file) and os.path.isfile("./" + bot.user_cds_file):
+        # bot.user_words = json.load(open(bot.user_words_file, "r"))
+        # bot.user_cds = json.load(open(bot.user_cds_file, "r"))
+        with open(bot.user_words_file) as word_data:
+            bot.user_words = json.load(word_data)
+        with open(bot.user_cds_file) as cd_data:
+            bot.user_cds = json.load(cd_data)
+        print("Data loaded successfully.")
+    else:
+        print("No data files provided or one was missing. No user data loaded.")
 
 
 @bot.command(pass_context=True)
@@ -70,27 +89,50 @@ def check_server(member, server_id):
     if server_id not in bot.user_words[member.id]:
         bot.user_words[member.id][server_id] = dict()
 
+
 def ensure_valid_channels(member, server, word):
-    result = set()
+    """If a word's watched channel is nonxistent, removes it from the dict to prevent errors"""
+    result = dict()
     # print("Server channels:", [x.id for x in server.channels])
+    if word not in bot.user_words[member.id][server.id].keys():
+        return
     all_channels = [x.id for x in server.channels]
-    for channel_id in bot.user_words[member.id][server.id][word]["channels"]:
+    for channel_id in bot.user_words[member.id][server.id][word]["channels"].keys():
         if channel_id[2:-1] in all_channels:
-            result.add(channel_id)
+            result[channel_id] = bot.static
     bot.user_words[member.id][server.id][word]["channels"] = result
 
 
-# TODO: saving user data via json
+def get_timeStamp() -> str:
+    """Returns current time (hr:min:sec)"""
+    return datetime.datetime.fromtimestamp(time.time()).strftime('%H:%M:%S')
+
+
+def write_to_json():
+    """Opens .json files and writes data into it"""
+    user_word_str = json.dumps(bot.user_words)
+    user_cd_str = json.dumps(bot.user_cds)
+
+    f = open(bot.user_words_file, "w+")
+    f.write(user_word_str)
+    f.close()
+    f = open(bot.user_cds_file, "w+")
+    f.write(user_cd_str)
+    f.close()
+    print("Saving user data @ {}".format(get_timeStamp()))
+
+
 # TODO: add instructions on how to use commands on the commands themselves for good documentation. eg word = ""
+# TODO: add clearwords command and update ..help
 
 
-example_dict = {"user id":
-    {"server": {
-            "word":
-                {"last_alerted": 0, "channels": set()}
-            }
-        }
-    }
+# example_dict = {"user id":
+#     {"server": {
+#             "word":
+#                 {"last_alerted": 0, "channels": dict()}
+#             }
+#         }
+#     }
 
 
 @bot.command(pass_context=True)
@@ -160,7 +202,7 @@ async def watchword(ctx, word, *args):
             return
 
     bot.user_words[member.id][server_id][word] = {"last_alerted": calendar.timegm(time.gmtime()),
-                                                  "channels": set([x for x in args])}
+                                                  "channels": {x: bot.static for x in args}}
     if len(args) == 0:
         embed = discord.Embed(title="\"{}\" added to watch list".format(word), color=0x39c12f)
         embed.set_footer(text="Watching entire server. Use \"{}addfilter\" to only watch certain channels.".format(bot.prefix))
@@ -187,7 +229,7 @@ async def worddetail(ctx, word):
         data = bot.user_words[member.id][server_id][word]
         embed = discord.Embed(title="Word Details for {}".format(member.name), color=0xeb8d25)
         embed.add_field(name="Word/Phrase", value=word, inline=False)
-        channels_watching = ", ".join({"#"+bot.get_channel(x[2:-1]).name for x in data["channels"]})
+        channels_watching = ", ".join({"#"+bot.get_channel(x[2:-1]).name for x in data["channels"].keys()})
         embed.add_field(name="Channels watching", value="All channels" if channels_watching == "" else channels_watching, inline=False)
         current_time = calendar.timegm(time.gmtime())
         embed.add_field(name="Last seen", value=str((current_time - data["last_alerted"])//60) + " min ago", inline=False)
@@ -219,12 +261,11 @@ async def addfilter(ctx, word, *args):
             await bot.say(embed=embed)
             return
 
-    for watchedword in bot.user_words[member.id][server_id].keys():
-        if watchedword == word:
-            bot.user_words[member.id][server_id][word]["channels"].update(args)
-            embed = discord.Embed(title="{} added to \"{}\"".format(", ".join({"#"+bot.get_channel(x[2:-1]).name for x in args}), word), color=0x39c12f)
-            await bot.say(embed=embed)
-            return
+    if word in bot.user_words[member.id][server_id].keys():
+        bot.user_words[member.id][server_id][word]["channels"].update({x: bot.static for x in args})
+        embed = discord.Embed(title="{} added to \"{}\"".format(", ".join({"#"+bot.get_channel(x[2:-1]).name for x in args}), word), color=0x39c12f)
+        await bot.say(embed=embed)
+        return
     embed = discord.Embed(title="\"{}\" is not being watched.".format(word), color=0xe23a1d)
     await bot.say(embed=embed)
 
@@ -252,13 +293,12 @@ async def deletefilter(ctx, word, *args):
             await bot.say(embed=embed)
             return
 
-    for watchedword in bot.user_words[member.id][server_id].keys():
-        if watchedword == word:
-            for to_remove in args:
-                bot.user_words[member.id][server_id][word]["channels"].discard(to_remove)
-            embed = discord.Embed(title="{} removed from \"{}\"".format(", ".join({"#"+bot.get_channel(x[2:-1]).name for x in args}), word), color=0x39c12f)
-            await bot.say(embed=embed)
-            return
+    if word in bot.user_words[member.id][server_id].keys():
+        for to_remove in args:
+            bot.user_words[member.id][server_id][word]["channels"].pop(to_remove, None)
+        embed = discord.Embed(title="{} removed from \"{}\"".format(", ".join({"#"+bot.get_channel(x[2:-1]).name for x in args}), word), color=0x39c12f)
+        await bot.say(embed=embed)
+        return
     embed = discord.Embed(title="\"{}\" is not being watched.".format(word), color=0xe23a1d)
     await bot.say(embed=embed)
 
@@ -276,7 +316,7 @@ async def clearfilter(ctx, word):
     check_server(member, server_id)
 
     if word in bot.user_words[member.id][server_id].keys():
-        bot.user_words[member.id][server_id][word]["channels"] = set()
+        bot.user_words[member.id][server_id][word]["channels"] = dict()
         embed = discord.Embed(title="All filters removed from \"{}\"".format(word), color=0x39c12f)
         embed.set_footer(text="Now watching entire server for word/phrase.")
         await bot.say(embed=embed)
@@ -362,38 +402,22 @@ async def on_message(message):
     await bot.process_commands(message)
 
 
-# def set_default(data):
-#     for mem in data:
-#         for server in data[mem]:
-#             for word in data[mem][server]:
-#                 data[mem][server][word]["channels"] = list(data[mem][server][word]["channels"])
-#     print(data)
-#     print(bot.user_words)
-
-
 async def save_json():
     """Saves user data in JSON format periodically."""
     await bot.wait_until_ready()
     while not bot.is_closed:
-        # user_word_str = json.dumps(bot.user_words, default=set_default)
-        user_cd_str = json.dumps(bot.user_cds)
-        wordfile = "userwords.txt"
-        cdfile = "usercds.txt"
-        # f = open(wordfile, "w+")
-        # f.write(user_word_str)
-        # f.close()
-        f = open(cdfile, "w+")
-        f.write(user_cd_str)
-        f.close()
-        print("Saving user data...(insert timestamp)")
-        await asyncio.sleep(60) # task runs every 3600 seconds (one hour)
+        await asyncio.sleep(900)  # task runs every 900 seconds (15 mins)
+        write_to_json()
 
 
 @bot.command()
 async def botstop():
     """Turns off the bot"""
-    embed = discord.Embed(title="WordWatch Bot logging out.", color=0xe23a1d)
+    embed = discord.Embed(title="WordWatch Bot saving data and logging out.", color=0xe23a1d)
     await bot.say(embed=embed)
+    print("Saving before logging out...")
+    write_to_json()
+    print("Done.")
     await bot.logout()
 
 bot.loop.create_task(save_json())
