@@ -7,6 +7,7 @@ import asyncio
 import json
 import os
 from bot_token import token
+import help_str
 
 prefix = ".."
 bot = commands.Bot(command_prefix=prefix, description='WordWatch Bot')
@@ -48,43 +49,44 @@ async def on_ready():
 @bot.command(pass_context=True)
 async def help(ctx):
     """Messages the user bot documentation"""
-    embed = discord.Embed(title="WordWatch Bot", description="Checks messages for key words and notifies you!", color=0x30abc0)
+    embed = discord.Embed(title="WordWatch Bot",
+                          description="Checks messages for key words and notifies you!",
+                          color=0x30abc0)
     embed.set_thumbnail(url=bot.thumb)
     embed.set_footer(text="by pixeltopic")
     await bot.send_message(ctx.message.author, embed=embed)
 
     embed = discord.Embed(title="WordWatch Bot Commands",
-                          description="Do {prefix}help to open this. Bot Prefix: {prefix}".format(
-                              prefix=bot.prefix), color=0xa3a3a3)
-    embed.set_thumbnail(url="")
+                          description=help_str.description_str.format(prefix=bot.prefix),
+                          color=0xa3a3a3)
     embed.add_field(name="watched",
-                    value="Gives user list of all watched words/phrases on the server",
+                    value=help_str.watched_str,
                     inline=False)
     embed.add_field(name="watchword \"word\" [channels (optional)]",
-                    value="""
-                    Start watching a word, receiving alerts based on your cooldown setting. Add channels separated by spaces after to only watch those channels for word/phrase.\neg. `{prefix}watchword "hey there" #general #off-topic`
-                    """.format(prefix=bot.prefix), inline=False)
+                    value=help_str.watchword_str.format(prefix=bot.prefix),
+                    inline=False)
     embed.add_field(name="deleteword \"word\"",
-                    value="Delete a word or phrase. Phrases must be wrapped in quotes.",
+                    value=help_str.deleteword_str.format(prefix=bot.prefix),
                     inline=False)
     embed.add_field(name="watchclear",
-                    value="Clears all watched words/phrases that you are watching.",
+                    value=help_str.watchclear_str,
                     inline=False)
     embed.add_field(name="cd [minutes]",
-                    value="Toggle how long before you want to be alerted again after the most recent alert",
+                    value=help_str.cd_str.format(prefix=bot.prefix),
                     inline=False)
     embed.add_field(name="worddetail \"word\"",
-                    value="Gives you details of a watched word/phrase.", inline=False)
+                    value=help_str.worddetail_str.format(prefix=bot.prefix),
+                    inline=False)
     embed.add_field(name="addfilter \"word\" [channels]",
-                    value="Based on word/phrase and channels separated by spaces, only watch for it in those channels",
+                    value=help_str.addfilter_str.format(prefix=bot.prefix),
                     inline=False)
     embed.add_field(name="deletefilter \"word\" [channels]",
-                    value="Based on word/phrase and channels separated by spaces, stop watching it in those channels",
+                    value=help_str.deletefilter_str.format(prefix=bot.prefix),
                     inline=False)
     embed.add_field(name="clearfilter \"word\"",
-                    value="Based on word/phrase, removes all enabled filters from it.",
+                    value=help_str.clearfilter_str.format(prefix=bot.prefix),
                     inline=False)
-    embed.set_footer(text="Phrases must be wrapped in quotes but single words don't. Commands will not work outside servers.")
+    embed.set_footer(text=help_str.footer_str)
 
     await bot.send_message(ctx.message.author, embed=embed)
 
@@ -510,8 +512,36 @@ async def save_json():
 
 
 @bot.command(pass_context=True)
+async def forcesave(ctx):
+    """Forces the bot to write current saved user data into their respective JSON files."""
+    if ctx.message.server is None:
+        embed = discord.Embed(
+            title="You can't use this command outside of servers.".format(prefix=bot.prefix), color=0xe23a1d)
+        await bot.say(embed=embed)
+        return
+
+    perms = ctx.message.author.server_permissions
+
+    if not perms.administrator:
+        embed = discord.Embed(title="Command only usable by admin".format(prefix=bot.prefix), color=0xe23a1d)
+        await bot.say(embed=embed)
+        return
+
+    write_to_json()
+
+    embed = discord.Embed(title="Force save complete.", color=0xe23a1d)
+    await bot.say(embed=embed)
+
+
+@bot.command(pass_context=True)
 async def botstop(ctx):
     """Turns off the bot"""
+    if ctx.message.server is None:
+        embed = discord.Embed(
+            title="You can't use this command outside of servers.".format(prefix=bot.prefix), color=0xe23a1d)
+        await bot.say(embed=embed)
+        return
+
     perms = ctx.message.author.server_permissions
 
     if not perms.administrator:
