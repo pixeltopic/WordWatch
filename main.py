@@ -42,17 +42,20 @@ async def on_ready():
         print("Data loaded successfully.")
     else:
         print("No data files provided or one was missing. No user data loaded.")
-    await bot.change_presence(game=discord.Game(name="Looking for text..."))
+    await bot.change_presence(game=discord.Game(name="Questions? Type {prefix}help".format(prefix=bot.prefix)))
 
 
 @bot.command(pass_context=True)
 async def help(ctx):
+    """Messages the user bot documentation"""
     embed = discord.Embed(title="WordWatch Bot", description="Checks messages for key words and notifies you!", color=0x30abc0)
     embed.set_thumbnail(url=bot.thumb)
     embed.set_footer(text="by pixeltopic")
     await bot.send_message(ctx.message.author, embed=embed)
 
-    embed = discord.Embed(title="WordWatch Bot Commands", description="Do {prefix}help to open this. Bot Prefix: {prefix}".format(prefix=bot.prefix), color=0xa3a3a3)
+    embed = discord.Embed(title="WordWatch Bot Commands",
+                          description="Do {prefix}help to open this. Bot Prefix: {prefix}".format(
+                              prefix=bot.prefix), color=0xa3a3a3)
     embed.set_thumbnail(url="")
     embed.add_field(name="watched",
                     value="Gives user list of all watched words/phrases on the server",
@@ -61,11 +64,15 @@ async def help(ctx):
                     value="""
                     Start watching a word, receiving alerts based on your cooldown setting. Add channels separated by spaces after to only watch those channels for word/phrase.\neg. `{prefix}watchword "hey there" #general #off-topic`
                     """.format(prefix=bot.prefix), inline=False)
-    embed.add_field(name="deleteword \"word\"", value="Delete a word or phrase. Phrases must be wrapped in quotes.", inline=False)
-    embed.add_field(name="watchclear", value="Clears all watched words/phrases that you are watching.",
+    embed.add_field(name="deleteword \"word\"",
+                    value="Delete a word or phrase. Phrases must be wrapped in quotes.",
+                    inline=False)
+    embed.add_field(name="watchclear",
+                    value="Clears all watched words/phrases that you are watching.",
                     inline=False)
     embed.add_field(name="cd [minutes]",
-                    value="Toggle how long before you want to be alerted again after the most recent alert", inline=False)
+                    value="Toggle how long before you want to be alerted again after the most recent alert",
+                    inline=False)
     embed.add_field(name="worddetail \"word\"",
                     value="Gives you details of a watched word/phrase.", inline=False)
     embed.add_field(name="addfilter \"word\" [channels]",
@@ -77,25 +84,25 @@ async def help(ctx):
     embed.add_field(name="clearfilter \"word\"",
                     value="Based on word/phrase, removes all enabled filters from it.",
                     inline=False)
-    embed.set_footer(text="Phrases must be wrapped in quotes but single words don't. Commands will not work when DMing bot.")
+    embed.set_footer(text="Phrases must be wrapped in quotes but single words don't. Commands will not work outside servers.")
 
     await bot.send_message(ctx.message.author, embed=embed)
 
 
-def check_user(member):
+def check_user(member: discord.Member):
     """Given a member, check if they are in the dictionary. if not, create one for them."""
     if member.id not in bot.user_words:
         bot.user_words[member.id] = dict()
         bot.user_cds[member.id] = 15 * 60
 
 
-def check_server(member, server_id):
+def check_server(member: discord.Member, server_id: str):
     """Given a server ID, checks if it exists in the dictionary. Intended to be used after check_user"""
     if server_id not in bot.user_words[member.id]:
         bot.user_words[member.id][server_id] = dict()
 
 
-def ensure_valid_channels(member, server, word):
+def ensure_valid_channels(member: discord.Member, server: discord.Server, word: str):
     """If a word's watched channel is nonxistent, removes it from the dict to prevent errors"""
     result = dict()
     # print("Server channels:", [x.id for x in server.channels])
@@ -127,10 +134,6 @@ def write_to_json():
     print("Saving user data @ {}".format(get_timeStamp()))
 
 
-# TODO: add instructions on how to use commands on the commands themselves for good documentation. eg word = ""
-# Restrict botstop command to admin perms
-
-
 # example_dict = {"user id":
 #     {"server": {
 #             "word":
@@ -141,9 +144,11 @@ def write_to_json():
 
 
 @bot.command(pass_context=True)
-async def cd(ctx, mins=15.0):
+async def cd(ctx, mins: float = 15.0):
     """Set cooldown (in minutes) for each word. If no parameter, automatically defaults to 15 minutes"""
-    if ctx.message.server == None:
+    if ctx.message.server is None:
+        embed = discord.Embed(title="You can't use this command outside of servers.", color=0xe23a1d)
+        await bot.say(embed=embed)
         return
     check_user(ctx.message.author)
     if mins >= 0:
@@ -155,9 +160,16 @@ async def cd(ctx, mins=15.0):
 
 
 @bot.command(pass_context=True)
-async def deleteword(ctx, word):
+async def deleteword(ctx, word: str = None):
     """Deletes specified word from the user's pinged words"""
-    if ctx.message.server == None:
+    if word is None:
+        embed = discord.Embed(
+            title="Use {prefix}help for command documentation.".format(prefix=bot.prefix), color=0x9f9f9f)
+        await bot.say(embed=embed)
+        return
+    if ctx.message.server is None:
+        embed = discord.Embed(title="You can't use this command outside of servers.", color=0xe23a1d)
+        await bot.say(embed=embed)
         return
 
     member = ctx.message.author
@@ -165,6 +177,9 @@ async def deleteword(ctx, word):
 
     check_user(member)
     check_server(member, server_id)
+
+    word = word.lower()
+
     if len(bot.user_words[member.id][server_id]) == 0:
         embed = discord.Embed(title="You don't have any words added.", color=0xe23a1d)
         await bot.say(embed=embed)
@@ -184,7 +199,9 @@ async def deleteword(ctx, word):
 @bot.command(pass_context=True)
 async def watchclear(ctx):
     """Clears all the user's watched words."""
-    if ctx.message.server == None:
+    if ctx.message.server is None:
+        embed = discord.Embed(title="You can't use this command outside of servers.", color=0xe23a1d)
+        await bot.say(embed=embed)
         return
 
     member = ctx.message.author
@@ -199,11 +216,17 @@ async def watchclear(ctx):
     await bot.say(embed=embed)
 
 
-
 @bot.command(pass_context=True)
-async def watchword(ctx, word, *args):
+async def watchword(ctx, word: str = None, *args):
     """Adds word to user's watched word list along with timestamp of when. optionally, allow channel filtering"""
-    if ctx.message.server == None:
+    if word is None:
+        embed = discord.Embed(
+            title="Use {prefix}help for command documentation.".format(prefix=bot.prefix), color=0x9f9f9f)
+        await bot.say(embed=embed)
+        return
+    if ctx.message.server is None:
+        embed = discord.Embed(title="You can't use this command outside of servers.", color=0xe23a1d)
+        await bot.say(embed=embed)
         return
 
     member = ctx.message.author
@@ -211,6 +234,8 @@ async def watchword(ctx, word, *args):
 
     check_user(member)
     check_server(member, server_id)
+
+    word = word.lower()
 
     if word in bot.user_words[member.id][server_id].keys():
         embed = discord.Embed(title="You are already watching \"{}\"".format(word), color=0x39c12f)
@@ -227,7 +252,8 @@ async def watchword(ctx, word, *args):
                                                   "channels": {x: bot.static for x in args}}
     if len(args) == 0:
         embed = discord.Embed(title="\"{}\" added to watch list".format(word), color=0x39c12f)
-        embed.set_footer(text="Watching entire server. Use \"{}addfilter\" to only watch certain channels.".format(bot.prefix))
+        embed.set_footer(
+            text="Watching entire server. Use \"{}addfilter\" to only watch certain channels.".format(bot.prefix))
     else:
         embed = discord.Embed(title="\"{}\" added to watch list".format(word), color=0x39c12f)
         embed.set_footer(text="Watching {}".format(", ".join({"#"+bot.get_channel(x[2:-1]).name for x in args})))
@@ -236,9 +262,16 @@ async def watchword(ctx, word, *args):
 
 
 @bot.command(pass_context=True)
-async def worddetail(ctx, word):
+async def worddetail(ctx, word: str = None):
     """Gives user details for a watched word or phrase."""
-    if ctx.message.server == None:
+    if word is None:
+        embed = discord.Embed(
+            title="Use {prefix}help for command documentation.".format(prefix=bot.prefix), color=0x9f9f9f)
+        await bot.say(embed=embed)
+        return
+    if ctx.message.server is None:
+        embed = discord.Embed(title="You can't use this command outside of servers.", color=0xe23a1d)
+        await bot.say(embed=embed)
         return
 
     member = ctx.message.author
@@ -246,15 +279,22 @@ async def worddetail(ctx, word):
 
     check_user(member)
     check_server(member, server_id)
+
+    word = word.lower()
     ensure_valid_channels(member, ctx.message.server, word)
+
     if word in bot.user_words[member.id][server_id].keys():
         data = bot.user_words[member.id][server_id][word]
         embed = discord.Embed(title="Word Details for {}".format(member.name), color=0xeb8d25)
         embed.add_field(name="Word/Phrase", value=word, inline=False)
         channels_watching = ", ".join({"#"+bot.get_channel(x[2:-1]).name for x in data["channels"].keys()})
-        embed.add_field(name="Channels watching", value="All channels" if channels_watching == "" else channels_watching, inline=False)
+        embed.add_field(name="Channels watching",
+                        value="All channels" if channels_watching == "" else channels_watching,
+                        inline=False)
         current_time = calendar.timegm(time.gmtime())
-        embed.add_field(name="Last seen", value=str((current_time - data["last_alerted"])//60) + " min ago", inline=False)
+        embed.add_field(name="Last seen",
+                        value=str((current_time - data["last_alerted"])//60) + " min ago",
+                        inline=False)
 
     else:
         embed = discord.Embed(title="\"{}\" was not found on your watch list".format(word), color=0xe23a1d)
@@ -262,9 +302,16 @@ async def worddetail(ctx, word):
 
 
 @bot.command(pass_context=True)
-async def addfilter(ctx, word, *args):
+async def addfilter(ctx, word: str = None, *args):
     """Adds filter to specified word"""
-    if ctx.message.server == None:
+    if word is None:
+        embed = discord.Embed(
+            title="Use {prefix}help for command documentation.".format(prefix=bot.prefix), color=0x9f9f9f)
+        await bot.say(embed=embed)
+        return
+    if ctx.message.server is None:
+        embed = discord.Embed(title="You can't use this command outside of servers.", color=0xe23a1d)
+        await bot.say(embed=embed)
         return
 
     member = ctx.message.author
@@ -272,6 +319,9 @@ async def addfilter(ctx, word, *args):
 
     check_user(member)
     check_server(member, server_id)
+
+    word = word.lower()
+
     if len(args) == 0:
         embed = discord.Embed(title="No channels specified.", color=0xe23a1d)
         await bot.say(embed=embed)
@@ -285,7 +335,9 @@ async def addfilter(ctx, word, *args):
 
     if word in bot.user_words[member.id][server_id].keys():
         bot.user_words[member.id][server_id][word]["channels"].update({x: bot.static for x in args})
-        embed = discord.Embed(title="{} added to \"{}\"".format(", ".join({"#"+bot.get_channel(x[2:-1]).name for x in args}), word), color=0x39c12f)
+        embed = discord.Embed(
+            title="{} added to \"{}\"".format(", ".join({"#"+bot.get_channel(x[2:-1]).name for x in args}), word),
+            color=0x39c12f)
         await bot.say(embed=embed)
         return
     embed = discord.Embed(title="\"{}\" is not being watched.".format(word), color=0xe23a1d)
@@ -293,9 +345,16 @@ async def addfilter(ctx, word, *args):
 
 
 @bot.command(pass_context=True)
-async def deletefilter(ctx, word, *args):
+async def deletefilter(ctx, word: str = None, *args):
     """Removes filter from specified word"""
-    if ctx.message.server == None:
+    if word is None:
+        embed = discord.Embed(
+            title="Use {prefix}help for command documentation.".format(prefix=bot.prefix), color=0x9f9f9f)
+        await bot.say(embed=embed)
+        return
+    if ctx.message.server is None:
+        embed = discord.Embed(title="You can't use this command outside of servers.", color=0xe23a1d)
+        await bot.say(embed=embed)
         return
 
     member = ctx.message.author
@@ -303,6 +362,8 @@ async def deletefilter(ctx, word, *args):
 
     check_user(member)
     check_server(member, server_id)
+
+    word = word.lower()
 
     if len(args) == 0:
         embed = discord.Embed(title="No channels specified.", color=0xe23a1d)
@@ -318,7 +379,9 @@ async def deletefilter(ctx, word, *args):
     if word in bot.user_words[member.id][server_id].keys():
         for to_remove in args:
             bot.user_words[member.id][server_id][word]["channels"].pop(to_remove, None)
-        embed = discord.Embed(title="{} removed from \"{}\"".format(", ".join({"#"+bot.get_channel(x[2:-1]).name for x in args}), word), color=0x39c12f)
+        embed = discord.Embed(
+            title="{} removed from \"{}\"".format(", ".join({"#"+bot.get_channel(x[2:-1]).name for x in args}), word),
+            color=0x39c12f)
         await bot.say(embed=embed)
         return
     embed = discord.Embed(title="\"{}\" is not being watched.".format(word), color=0xe23a1d)
@@ -326,9 +389,16 @@ async def deletefilter(ctx, word, *args):
 
 
 @bot.command(pass_context=True)
-async def clearfilter(ctx, word):
+async def clearfilter(ctx, word: str = None):
     """Clears filter from specified word"""
-    if ctx.message.server == None:
+    if word is None:
+        embed = discord.Embed(
+            title="Use {prefix}help for command documentation.".format(prefix=bot.prefix), color=0x9f9f9f)
+        await bot.say(embed=embed)
+        return
+    if ctx.message.server is None:
+        embed = discord.Embed(title="You can't use this command outside of servers.", color=0xe23a1d)
+        await bot.say(embed=embed)
         return
 
     member = ctx.message.author
@@ -336,6 +406,8 @@ async def clearfilter(ctx, word):
 
     check_user(member)
     check_server(member, server_id)
+
+    word = word.lower()
 
     if word in bot.user_words[member.id][server_id].keys():
         bot.user_words[member.id][server_id][word]["channels"] = dict()
@@ -350,7 +422,10 @@ async def clearfilter(ctx, word):
 @bot.command(pass_context=True)
 async def watched(ctx):
     """Shows user a list of their watched words"""
-    if ctx.message.server == None:
+    if ctx.message.server is None:
+        embed = discord.Embed(
+            title="You can't use this command outside of servers.".format(prefix=bot.prefix), color=0xe23a1d)
+        await bot.say(embed=embed)
         return
     member = ctx.message.author
     server_id = ctx.message.server.id
@@ -374,11 +449,13 @@ async def watched(ctx):
 
 @bot.event
 async def on_message(message):
+    """Scans messages for key words/phrases and alerts any user that might be watching them"""
     if message.author == bot.user:
         return
     current_time = calendar.timegm(time.gmtime())
 
-    if (bot.last_checked == -1 or current_time - bot.last_checked >= bot.scan_frequency) and message.content[:2] != bot.prefix:
+    if (bot.last_checked == -1 or current_time - bot.last_checked >= bot.scan_frequency) and \
+            message.content[:2] != bot.prefix:
         # print("Check Paused.")
         bot.last_checked = current_time
 
@@ -386,7 +463,7 @@ async def on_message(message):
             if message.server.id in bot.user_words[mem]:
                 for keyword, innerdict in bot.user_words[mem][message.server.id].items():
                     if len(innerdict["channels"]) == 0 and \
-                            keyword in message.content and \
+                            keyword in message.content.lower() and \
                             current_time-innerdict["last_alerted"] >= bot.user_cds[mem] and \
                             message.content[:2] != bot.prefix:
 
@@ -404,7 +481,7 @@ async def on_message(message):
                         await bot.send_message(user, embed=embed)
 
                     elif "<#"+message.channel.id+">" in innerdict["channels"] and \
-                            keyword in message.content and \
+                            keyword in message.content.lower() and \
                             current_time-innerdict["last_alerted"] >= bot.user_cds[mem] and \
                             message.content[:2] != bot.prefix:
 
@@ -432,9 +509,16 @@ async def save_json():
         write_to_json()
 
 
-@bot.command()
-async def botstop():
+@bot.command(pass_context=True)
+async def botstop(ctx):
     """Turns off the bot"""
+    perms = ctx.message.author.server_permissions
+
+    if not perms.administrator:
+        embed = discord.Embed(title="Command only usable by admin".format(prefix=bot.prefix), color=0xe23a1d)
+        await bot.say(embed=embed)
+        return
+
     embed = discord.Embed(title="WordWatch Bot saving data and logging out.", color=0xe23a1d)
     await bot.say(embed=embed)
     print("Saving before logging out...")
